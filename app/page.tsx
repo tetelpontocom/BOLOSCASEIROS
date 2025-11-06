@@ -19,24 +19,56 @@ import { ArrowRight, CheckCircle, Home, Star, HelpCircle } from "lucide-react"
 const LINK_MAIN = "https://chk.eduzz.com/Q9NDEKXK01"
 const LINK_COMBO = "https://chk.eduzz.com/KW83Y2VB01"
 
+function usePixelTetel() {
+  useEffect(() => {
+    if (!(window as any).fbq) {
+      !((f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) => {
+        if (f.fbq) return
+        n = f.fbq = () => {
+          n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+        }
+        if (!f._fbq) f._fbq = n
+        n.push = n
+        n.loaded = !0
+        n.version = "2.0"
+        n.queue = []
+        t = b.createElement(e)
+        t.async = !0
+        t.src = v
+        s = b.getElementsByTagName(e)[0]
+        s.parentNode.insertBefore(t, s)
+      })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js")
+      ;(window as any).fbq("init", "1305167264321996")
+      ;(window as any).fbq("track", "PageView")
+    } else {
+      ;(window as any).fbq("track", "PageView")
+    }
+  }, [])
+
+  const trackLead = (label: string) =>
+    (window as any).fbq?.("track", "Lead", { label, origem: sessionStorage.getItem("tetel_origem") || "direta" })
+
+  const trackAddToCart = (label: string) =>
+    (window as any).fbq?.("track", "AddToCart", { label, origem: sessionStorage.getItem("tetel_origem") || "direta" })
+
+  return { trackLead, trackAddToCart }
+}
+
 export default function BolosCaseirosLP() {
   const [mounted, setMounted] = useState(false)
   const [origem, setOrigem] = useState<string | null>(null)
+  const { trackLead, trackAddToCart } = usePixelTetel()
 
   useEffect(() => {
     setMounted(true)
-    try {
-      const url = new URL(window.location.href)
-      const q = url.searchParams.get("origem")
-      if (q) {
-        sessionStorage.setItem("tetel_origem", q)
-        setOrigem(q)
-      } else {
-        const saved = sessionStorage.getItem("tetel_origem")
-        if (saved) setOrigem(saved)
-      }
-    } catch {
-      /* ignore */
+    const params = new URLSearchParams(window.location.search)
+    const urlOrigem = params.get("origem")
+    if (urlOrigem) {
+      sessionStorage.setItem("tetel_origem", urlOrigem)
+      setOrigem(urlOrigem)
+    } else {
+      const saved = sessionStorage.getItem("tetel_origem")
+      if (saved) setOrigem(saved)
     }
   }, [])
 
@@ -60,10 +92,10 @@ export default function BolosCaseirosLP() {
   if (!mounted) return null
 
   return (
-    <main className="min-h-screen bg-[#FFF8F1] text-[#1F1A17]">
+    <main className="min-h-screen bg-[#FFF8F1] text-[#1F1A17] flex flex-col items-center justify-center px-6 py-16">
       {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-[#FFF8F1]/90 backdrop-blur border-b border-[#F0E1D2]">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 bg-[#FFF8F1]/90 backdrop-blur border-b border-[#F0E1D2] w-full">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between w-full">
           <div className="flex items-center gap-3">
             <Image
               src="/images/bolos/logo-bolos.jpg"
@@ -111,6 +143,9 @@ export default function BolosCaseirosLP() {
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <a
                 href={withOrigin(LINK_MAIN)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackAddToCart("CTA Principal - Bolos Caseiros")}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F1A17] text-white px-5 py-3 text-sm font-medium shadow-sm hover:opacity-90"
               >
                 {hero.cta} <ArrowRight className="h-4 w-4" />
@@ -223,6 +258,9 @@ export default function BolosCaseirosLP() {
             <div className="mt-5 flex flex-col sm:flex-row gap-3">
               <a
                 href={withOrigin(LINK_COMBO)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackLead("Combo 27 - Bolos Caseiros")}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F1A17] text-white px-5 py-3 text-sm font-medium shadow-sm hover:opacity-90"
               >
                 Garantir o combo agora <ArrowRight className="h-4 w-4" />
@@ -295,6 +333,9 @@ export default function BolosCaseirosLP() {
           </p>
           <a
             href={withOrigin(LINK_MAIN)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackAddToCart("CTA Final - Bolos Caseiros")}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F1A17] text-white px-6 py-3 text-sm font-medium shadow-sm hover:opacity-90"
           >
             Começar por R$10 agora <ArrowRight className="h-4 w-4" />
