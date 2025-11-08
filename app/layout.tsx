@@ -1,7 +1,7 @@
 import type React from "react"
 import "./globals.css"
 import type { Metadata } from "next"
-import ClientLayout from "./ClientLayout" // Import the new client component
+import ClientLayout from "./ClientLayout"
 
 export const metadata: Metadata = {
   title: "Bolos Caseiros Lucrativos | TetelPontocom",
@@ -29,15 +29,25 @@ export const metadata: Metadata = {
     images: ["/hero-bolo.png"],
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.ico", type: "image/png", sizes: "512x512" },
+    ],
+    apple: "/favicon.ico",
   },
-    generator: 'v0.app'
+  generator: "v0.app",
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return <ClientLayout>{children}</ClientLayout>
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="pt-BR">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>
+        <ClientLayout>{children}</ClientLayout>
+      </body>
+    </html>
+  )
 }

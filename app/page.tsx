@@ -26,15 +26,22 @@ const useMetaPixel = (pixelId: string, product: { name: string; category: string
       if ((window as any)?.fbq) {
         ;(window as any).fbq("track", event, payload || {})
       }
-    } catch {}
+    } catch (error) {
+      console.error("[v0] Facebook Pixel track error:", error)
+    }
   }, [])
 
   useEffect(() => {
     try {
+      if ((window as any).fbq && (window as any)._fbq_initialized) {
+        console.log("[v0] Facebook Pixel already initialized")
+        return
+      }
+
       if (!(window as any).fbq) {
         !((f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) => {
           if (f.fbq) return
-          n = f.fbq = (args: any) => {
+          n = f.fbq = (...args: any[]) => {
             n.callMethod ? n.callMethod.apply(n, args) : n.queue.push(args)
           }
           if (!f._fbq) f._fbq = n
@@ -45,10 +52,17 @@ const useMetaPixel = (pixelId: string, product: { name: string; category: string
           t = b.createElement(e)
           t.async = !0
           t.src = v
+          t.onerror = () => {
+            console.error("[v0] Failed to load Facebook Pixel script")
+          }
+          t.onload = () => {
+            console.log("[v0] Facebook Pixel script loaded successfully")
+          }
           s = b.getElementsByTagName(e)[0]
           s.parentNode.insertBefore(t, s)
         })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js")
       }
+      ;(window as any)._fbq_initialized = true
       ;(window as any).fbq("init", pixelId)
       ;(window as any).fbq("track", "PageView")
       ;(window as any).fbq("track", "ViewContent", {
@@ -58,7 +72,10 @@ const useMetaPixel = (pixelId: string, product: { name: string; category: string
         value: product.price || 0,
         currency: "BRL",
       })
-    } catch {}
+      console.log("[v0] Facebook Pixel initialized successfully")
+    } catch (error) {
+      console.error("[v0] Facebook Pixel initialization error:", error)
+    }
   }, [pixelId, product])
 
   return { track }
@@ -201,16 +218,24 @@ const Page: React.FC = () => {
   const { track } = useMetaPixel(pixelId, product)
 
   const handleCheckout = useCallback(() => {
-    track("InitiateCheckout", {
-      content_name: product.name,
-      value: product.price,
-      currency: "BRL",
-      ...utm,
-    })
+    try {
+      track("InitiateCheckout", {
+        content_name: product.name,
+        value: product.price,
+        currency: "BRL",
+        ...utm,
+      })
+    } catch (error) {
+      console.error("[v0] Checkout tracking error:", error)
+    }
   }, [track, product, utm])
 
   const handleLead = useCallback(() => {
-    track("Lead", { content_name: product.name, ...utm })
+    try {
+      track("Lead", { content_name: product.name, ...utm })
+    } catch (error) {
+      console.error("[v0] Lead tracking error:", error)
+    }
   }, [track, product, utm])
 
   const checkoutHref = useMemo(() => {
