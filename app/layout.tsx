@@ -1,33 +1,43 @@
 import type React from "react"
-import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
-
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+import type { Metadata } from "next"
+import ClientLayout from "./ClientLayout" // Import the new client component
 
 export const metadata: Metadata = {
-  title: "Bolos Caseiros Lucrativos - Aprenda a Fazer Bolos que Vendem",
-  description:
-    "Descubra como fazer bolos caseiros sofisticados que encantam e geram renda extra em apenas 7 dias. Método simples e prático.",
-  generator: "v0.app",
-  icons: {
-    icon: "/favicon.png",
+  title: "Bolos Caseiros Lucrativos | TetelPontocom",
+  description: "Aprenda a lucrar com bolos caseiros simples, bonitos e que vendem — um produto by TetelPontocom.",
+  openGraph: {
+    title: "Bolos Caseiros Lucrativos — simples, bonitos e que vendem",
+    description: "Transforme receitas simples em renda real com o kit completo da TetelPontocom.",
+    url: "https://boloscaseiros.tetel.online",
+    siteName: "TetelPontocom",
+    images: [
+      {
+        url: "/hero-bolo.png",
+        width: 1200,
+        height: 630,
+        alt: "Bolo Caseiro Lucrativo — TetelPontocom",
+      },
+    ],
+    locale: "pt_BR",
+    type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bolos Caseiros Lucrativos — simples, bonitos e que vendem",
+    description: "Receitas práticas e didáticas para lucrar com bolos caseiros. Parte do Ecossistema Tetel.",
+    images: ["/hero-bolo.png"],
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
-  return (
-    <html lang="en">
-      <body className={`font-sans antialiased`}>
-        {children}
-        <Analytics />
-      </body>
-    </html>
-  )
+}) {
+  return <ClientLayout>{children}</ClientLayout>
 }

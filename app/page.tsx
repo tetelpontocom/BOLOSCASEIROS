@@ -1,368 +1,464 @@
 "use client"
+import type React from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 
-import { useEffect, useMemo, useState } from "react"
-import Image from "next/image"
-import { ArrowRight, CheckCircle, Home, Star, HelpCircle } from "lucide-react"
-
-/**
- * LP Bolos Caseiros – v1.1 Final (V0 Free Safe Mode)
- * - Ajuste de tom humano (sem termos técnicos)
- * - Gancho de vídeo destacado (hero, aprendizado, CTA)
- * - Protocolo de origem integrado (?origem=...)
- * - Compatível 100% com V0 Free
- *
- * Upgrade path (V0 Pro):
- * - Integrar tracking FB/GA via <Script strategy="afterInteractive">
- * - Carregar depoimentos e FAQ de JSON externo
- */
-
-const LINK_MAIN = "https://chk.eduzz.com/Q9NDEKXK01"
-const LINK_COMBO = "https://chk.eduzz.com/KW83Y2VB01"
-
-function usePixelTetel() {
+/* ----------------------------- Helpers base ------------------------------ */
+const useUTM = () => {
+  const [utm, setUtm] = useState<Record<string, string>>({})
   useEffect(() => {
-    if (!(window as any).fbq) {
-      !((f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) => {
-        if (f.fbq) return
-        n = f.fbq = () => {
-          n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments)
-        }
-        if (!f._fbq) f._fbq = n
-        n.push = n
-        n.loaded = !0
-        n.version = "2.0"
-        n.queue = []
-        t = b.createElement(e)
-        t.async = !0
-        t.src = v
-        s = b.getElementsByTagName(e)[0]
-        s.parentNode.insertBefore(t, s)
-      })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js")
-      ;(window as any).fbq("init", "1305167264321996")
-      ;(window as any).fbq("track", "PageView")
-    } else {
-      ;(window as any).fbq("track", "PageView")
-    }
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
+      const obj: Record<string, string> = {}
+      keys.forEach((k) => {
+        const v = params.get(k)
+        if (v) obj[k] = v
+      })
+      setUtm(obj)
+    } catch {}
   }, [])
-
-  const trackLead = (label: string) =>
-    (window as any).fbq?.("track", "Lead", { label, origem: sessionStorage.getItem("tetel_origem") || "direta" })
-
-  const trackAddToCart = (label: string) =>
-    (window as any).fbq?.("track", "AddToCart", { label, origem: sessionStorage.getItem("tetel_origem") || "direta" })
-
-  return { trackLead, trackAddToCart }
+  return utm
 }
 
-export default function BolosCaseirosLP() {
-  const [mounted, setMounted] = useState(false)
-  const [origem, setOrigem] = useState<string | null>(null)
-  const { trackLead, trackAddToCart } = usePixelTetel()
-
-  useEffect(() => {
-    setMounted(true)
-    const params = new URLSearchParams(window.location.search)
-    const urlOrigem = params.get("origem")
-    if (urlOrigem) {
-      sessionStorage.setItem("tetel_origem", urlOrigem)
-      setOrigem(urlOrigem)
-    } else {
-      const saved = sessionStorage.getItem("tetel_origem")
-      if (saved) setOrigem(saved)
-    }
+const useMetaPixel = (pixelId: string, product: { name: string; category: string; price?: number }) => {
+  const track = useCallback((event: string, payload?: Record<string, any>) => {
+    try {
+      if ((window as any)?.fbq) {
+        ;(window as any).fbq("track", event, payload || {})
+      }
+    } catch {}
   }, [])
 
-  const withOrigin = (base: string) => (origem ? `${base}?origem=${encodeURIComponent(origem)}` : base)
+  useEffect(() => {
+    try {
+      if (!(window as any).fbq) {
+        !((f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) => {
+          if (f.fbq) return
+          n = f.fbq = (args: any) => {
+            n.callMethod ? n.callMethod.apply(n, args) : n.queue.push(args)
+          }
+          if (!f._fbq) f._fbq = n
+          n.push = n
+          n.loaded = !0
+          n.version = "2.0"
+          n.queue = []
+          t = b.createElement(e)
+          t.async = !0
+          t.src = v
+          s = b.getElementsByTagName(e)[0]
+          s.parentNode.insertBefore(t, s)
+        })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js")
+      }
+      ;(window as any).fbq("init", pixelId)
+      ;(window as any).fbq("track", "PageView")
+      ;(window as any).fbq("track", "ViewContent", {
+        content_name: product.name,
+        content_category: product.category,
+        content_type: "product",
+        value: product.price || 0,
+        currency: "BRL",
+      })
+    } catch {}
+  }, [pixelId, product])
 
-  const hero = useMemo(
-    () => ({
-      title: "Bolos Caseiros Lucrativos — simples, bonitos e que vendem",
-      subtitle:
-        "Aprenda receitas fáceis, apresentação irresistível e um passo a passo direto para lucrar no seu bairro ou online.",
-      bullets: [
-        "Receitas testadas com ingredientes acessíveis",
-        "Acabamentos e embalagens que valorizam o produto",
-        "Precificação clara + planilha de custos",
-      ],
-      cta: "Quero aprender agora",
-    }),
-    [],
+  return { track }
+}
+
+/* ----------------------------- UI Primitivos ----------------------------- */
+type CTAProps = {
+  href: string
+  label: string
+  variant?: "primary" | "secondary" | "ghost"
+  onClick?: () => void
+  "data-track"?: string
+}
+const CTA: React.FC<CTAProps> = ({ href, label, variant = "primary", onClick, ...rest }) => {
+  const base =
+    "inline-flex items-center justify-center rounded-2xl px-6 py-3 text-base font-semibold transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
+  const styles =
+    variant === "primary"
+      ? "bg-black text-white hover:scale-[1.02] focus:ring-black/60"
+      : variant === "secondary"
+        ? "bg-white text-black hover:scale-[1.02] focus:ring-white/60"
+        : "bg-transparent text-white/80 hover:text-white focus:ring-white/30"
+  return (
+    <a href={href} onClick={onClick} className={`${base} ${styles}`} aria-label={label} {...rest}>
+      {label}
+    </a>
   )
+}
 
-  if (!mounted) return null
+/* --------------------------------- Hero --------------------------------- */
+const Hero: React.FC<{
+  title: string
+  subtitle: string
+  description: string
+  imageDesktop: string
+  imageMobile?: string
+  onCTAClick?: () => void
+  ctaHref: string
+}> = ({ title, subtitle, description, imageDesktop, imageMobile, onCTAClick, ctaHref }) => {
+  return (
+    <section className="relative isolate overflow-hidden bg-[#fff7f2]">
+      <div className="mx-auto max-w-7xl px-4 py-16 sm:py-20 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+        <div>
+          <span className="inline-flex items-center gap-2 text-xs font-medium text-black/70">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> by TetelPontocom
+          </span>
+          <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold text-black leading-tight">{title}</h1>
+          <p className="mt-2 text-lg text-black/80 font-medium">{subtitle}</p>
+          <p className="mt-4 text-black/70 text-base max-w-lg">{description}</p>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <a
+              href={ctaHref}
+              onClick={onCTAClick}
+              className="rounded-2xl bg-black text-white px-6 py-3 font-semibold hover:scale-[1.03] transition-transform duration-200"
+            >
+              Quero começar agora
+            </a>
+            <a
+              href="#oferta"
+              className="rounded-2xl border border-black/30 px-6 py-3 font-medium text-black/80 hover:scale-[1.03] transition-transform duration-200"
+            >
+              Ver detalhes do kit
+            </a>
+          </div>
+
+          <p className="mt-6 text-sm text-black/60">
+            📈 Mais de <strong>1.200 alunas</strong> já aplicaram essas receitas e aumentaram suas vendas.
+          </p>
+        </div>
+
+        {/* Hero Image */}
+        <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl">
+          <picture>
+            {imageMobile && <source media="(max-width: 640px)" srcSet={imageMobile} />}
+            <img
+              src={imageDesktop || "/placeholder.svg"}
+              alt="Bolos Caseiros Lucrativos - TetelPontocom"
+              className="w-full h-full object-cover"
+              loading="eager"
+              decoding="async"
+            />
+          </picture>
+        </div>
+      </div>
+
+      {/* Mockups abaixo do hero */}
+      <div className="mx-auto max-w-5xl px-4 pb-10">
+        <div className="flex flex-wrap justify-center items-center gap-6">
+          <div className="flex flex-col items-center">
+            <img
+              src="/images/bolos/mockup-pdf-bolos-caseiros.png"
+              alt="PDF Ilustrado"
+              className="h-20 sm:h-24 object-contain"
+            />
+            <span className="mt-2 text-sm font-medium text-black">PDF Ilustrado</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <img
+              src="/images/bolos/mockup-video-bolos-caseiros.png"
+              alt="Vídeo-Aulas"
+              className="h-20 sm:h-24 object-contain"
+            />
+            <span className="mt-2 text-sm font-medium text-black">Vídeo-Aulas</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <img
+              src="/images/bolos/mockup-planilha-bolos-caseiros.png"
+              alt="Planilha de Custos"
+              className="h-20 sm:h-24 object-contain"
+            />
+            <span className="mt-2 text-sm font-medium text-black">Planilha de Custos</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------- Seções ---------------------------------- */
+const Section: React.FC<{ title?: string; children: React.ReactNode; id?: string }> = ({ title, children, id }) => (
+  <section id={id} className="mx-auto max-w-6xl px-4 py-10">
+    {title && <h2 className="text-2xl font-semibold text-black">{title}</h2>}
+    <div className="mt-4 text-black/90">{children}</div>
+  </section>
+)
+
+const FeatureCard: React.FC<{ title: string; desc: string }> = ({ title, desc }) => (
+  <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
+    <h3 className="font-semibold">{title}</h3>
+    <p className="mt-1 text-sm text-black/70">{desc}</p>
+  </div>
+)
+
+/* --------------------------------- Page ---------------------------------- */
+const Page: React.FC = () => {
+  const pixelId = "1305167264321996"
+  const product = useMemo(() => ({ name: "PLR — Bolos Caseiros", category: "PLR Culinária", price: 27 }), [])
+  const utm = useUTM()
+  const { track } = useMetaPixel(pixelId, product)
+
+  const handleCheckout = useCallback(() => {
+    track("InitiateCheckout", {
+      content_name: product.name,
+      value: product.price,
+      currency: "BRL",
+      ...utm,
+    })
+  }, [track, product, utm])
+
+  const handleLead = useCallback(() => {
+    track("Lead", { content_name: product.name, ...utm })
+  }, [track, product, utm])
+
+  const checkoutHref = useMemo(() => {
+    const base = "https://chk.eduzz.com/Q9NDEKXK01"
+    const params = new URLSearchParams(utm as any)
+    const qs = params.toString()
+    return qs ? `${base}&${qs}` : base
+  }, [utm])
 
   return (
-    <main className="min-h-screen bg-[#FFF8F1] text-[#1F1A17] flex flex-col items-center justify-center px-6 py-16">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-[#FFF8F1]/90 backdrop-blur border-b border-[#F0E1D2] w-full">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between w-full">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/images/bolos/logo-bolos.jpg"
-              alt="Bolos Caseiros – TetelPontocom"
-              width={28}
-              height={28}
-              className="rounded-sm ring-1 ring-[#EEDFD2]"
-            />
-            <span className="text-sm font-semibold tracking-tight">Bolos Caseiros by TetelPontocom</span>
-          </div>
-          <nav className="hidden sm:flex items-center gap-5 text-sm">
-            <a href="#aprende" className="hover:opacity-80">
-              O que você aprende
-            </a>
-            <a href="#depo" className="hover:opacity-80">
-              Depoimentos
-            </a>
-            <a href="#faq" className="hover:opacity-80">
-              Dúvidas
-            </a>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-white text-black">
+      {/* HERO HÍBRIDA */}
+      <section className="relative isolate overflow-hidden bg-[#fff6f0] py-16 sm:py-20">
+        {/* Fundo fluido (efeito calda gourmet) */}
+        <div
+          className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,180,150,0.25),transparent_70%),radial-gradient(circle_at_70%_70%,rgba(255,210,190,0.2),transparent_70%)] blur-3xl"
+          aria-hidden="true"
+        ></div>
 
-      {/* HERO */}
-      <section className="relative">
-        <div className="mx-auto max-w-6xl px-4 py-12 grid md:grid-cols-2 gap-10 items-center">
-          <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold leading-tight">{hero.title}</h1>
-            <p className="mt-3 text-[#4B423C]">
-              {hero.subtitle}
-              <br />
-              <span className="text-[#FF6B00] font-medium">
-                Aulas 100% em vídeo com acompanhamento em PDF — simples, didático e pronto pra aplicar.
-              </span>
-            </p>
-            <ul className="mt-5 space-y-2 text-sm text-[#4B423C]">
-              {hero.bullets.map((b) => (
-                <li key={b} className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 mt-0.5 text-[#FF6B00]" />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <a
-                href={withOrigin(LINK_MAIN)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => trackAddToCart("CTA Principal - Bolos Caseiros")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F1A17] text-white px-5 py-3 text-sm font-medium shadow-sm hover:opacity-90"
-              >
-                {hero.cta} <ArrowRight className="h-4 w-4" />
-              </a>
-              <a
-                href="#combo"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-[#EEDFD2] text-[#1F1A17] px-5 py-3 text-sm hover:bg-[#FFF2E6]"
-              >
-                Ver oferta combo R$27
-              </a>
-            </div>
-            <div className="mt-2 text-[11px] text-[#816e62]">Pagamento seguro pela Eduzz • 7 dias de garantia</div>
-          </div>
-
-          <div className="relative">
-            <div className="relative h-[280px] sm:h-[360px] w-full overflow-hidden rounded-2xl">
-              <Image
-                src="/images/bolos/hero-bolo-real.jpg"
-                alt="Bolo caseiro apetitoso"
-                fill
-                className="object-cover"
-                priority
+        <div className="relative z-10 mx-auto max-w-6xl px-4 flex flex-col items-center text-center">
+          {/* Hero principal */}
+          <div className="w-full max-w-4xl mb-8">
+            <picture>
+              <source
+                media="(max-width: 768px)"
+                srcSet="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/hero-bolos-caseiros-lucrativos-mobile-I3IwRqMWEDGNbiRpau4SaVxoGMxgpd.jpg"
               />
-            </div>
-            <div className="absolute -bottom-6 -left-4 sm:-left-6">
-              <Image
-                src="/images/bolos/mockup-ebook-bolos.png"
-                alt="Ebook Bolos Caseiros Lucrativos"
-                width={220}
-                height={280}
-                className="rounded-xl shadow-lg ring-1 ring-[#EEDFD2]"
-                priority
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/hero-bolos-caseiros-lucrativos-desktop-6GOVzUrAOWFcEwWGoLB7WqPEVSL2Sl.jpg"
+                alt="Bolos Caseiros Lucrativos - Kit Completo TetelPontocom"
+                className="w-full rounded-2xl shadow-xl object-cover"
+                loading="eager"
+                decoding="async"
               />
-            </div>
+            </picture>
           </div>
-        </div>
-      </section>
 
-      {/* O QUE VOCÊ VAI APRENDER */}
-      <section id="aprende" className="mx-auto max-w-6xl px-4 py-14">
-        <h2 className="text-2xl font-semibold tracking-tight mb-6">O que você vai aprender</h2>
-        <div className="grid md:grid-cols-2 gap-6">
-          <ul className="space-y-3 text-sm text-[#4B423C]">
-            {[
-              "Receitas base + variações (chocolate, fubá, laranja…)",
-              "Textura perfeita: fofinho, úmido e padronizado",
-              "Coberturas e finalizações que encantam",
-              "Embalagem de baixo custo com aparência premium",
-              "Treinamento 100% em vídeo com linguagem leve e prática",
-            ].map((t) => (
-              <li key={t} className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 mt-0.5 text-[#FF6B00]" />
-                <span>{t}</span>
-              </li>
-            ))}
-          </ul>
-          <ul className="space-y-3 text-sm text-[#4B423C]">
-            {[
-              "Precificação + planilha de custos incluída",
-              "Estrutura simples de pedidos e entregas",
-              "Como tirar fotos que vendem (com o celular)",
-              "Ideias de ofertas para datas especiais",
-            ].map((t) => (
-              <li key={t} className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 mt-0.5 text-[#FF6B00]" />
-                <span>{t}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* DEPOIMENTOS */}
-      <section id="depo" className="mx-auto max-w-6xl px-4 py-14">
-        <h2 className="text-2xl font-semibold tracking-tight mb-6">Quem já aplicou, aprovou</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            "/images/bolos/depo-1.png",
-            "/images/bolos/depo-2.png",
-            "/images/bolos/depo-3.png",
-            "/images/bolos/depo-4.png",
-          ].map((src, i) => (
-            <figure key={src} className="rounded-2xl bg-white border border-[#EEDFD2] p-4">
-              <div className="flex items-center gap-1 text-[#E5A100] mb-2">
-                {Array.from({ length: 5 }).map((_, idx) => (
-                  <Star key={idx} className="h-4 w-4 fill-current" />
-                ))}
-              </div>
-              <Image
-                src={src || "/placeholder.svg"}
-                alt={`Depoimento ${i + 1}`}
-                width={320}
-                height={220}
-                className="rounded-lg ring-1 ring-[#F0E1D2]"
-              />
-            </figure>
-          ))}
-        </div>
-      </section>
-
-      {/* OFERTA COMBO */}
-      <section id="combo" className="border-y border-[#F0E1D2] bg-[#FFF2E6]">
-        <div className="mx-auto max-w-6xl px-4 py-12 grid md:grid-cols-2 gap-8 items-center">
-          <div>
-            <h3 className="text-xl md:text-2xl font-semibold mb-2">Oferta Combo R$27</h3>
-            <p className="text-[#4B423C]">
-              Tenha o pacote completo para acelerar seus resultados — conteúdo + atalhos práticos. Upgrades e bônus
-              opcionais aparecem direto na Eduzz.
-            </p>
-            <div className="mt-5 flex flex-col sm:flex-row gap-3">
-              <a
-                href={withOrigin(LINK_COMBO)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => trackLead("Combo 27 - Bolos Caseiros")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F1A17] text-white px-5 py-3 text-sm font-medium shadow-sm hover:opacity-90"
-              >
-                Garantir o combo agora <ArrowRight className="h-4 w-4" />
-              </a>
-              <a
-                href={withOrigin(LINK_MAIN)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white border border-[#EEDFD2] text-[#1F1A17] px-5 py-3 text-sm hover:bg-[#FFF2E6]"
-              >
-                Prefiro começar por R$10
-              </a>
-            </div>
-            <div className="mt-2 text-[11px] text-[#816e62]">
-              💡 Você ainda pode incluir materiais complementares por apenas R$7,90 e R$8,90 durante a compra — são
-              recursos que aceleram seus resultados.
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              "/images/bolos/bonus-1.jpg",
-              "/images/bolos/bonus-2.jpg",
-              "/images/bolos/bonus-3.jpg",
-              "/images/bolos/bonus-4.jpg",
-            ].map((src) => (
-              <div key={src} className="relative h-28 w-full rounded-xl overflow-hidden ring-1 ring-[#EEDFD2]">
-                <Image src={src || "/placeholder.svg"} alt="Conteúdo do combo" fill className="object-cover" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section id="faq" className="mx-auto max-w-6xl px-4 py-14">
-        <h2 className="text-2xl font-semibold tracking-tight mb-6">Dúvidas frequentes</h2>
-        <div className="grid md:grid-cols-2 gap-6">
-          {[
-            {
-              q: "É difícil fazer e vender?",
-              a: "Não. As receitas são simples e há um passo a passo prático para produzir e oferecer no seu bairro, trabalho ou redes.",
-            },
-            {
-              q: "Preciso de curso caro de confeitaria?",
-              a: "Não. O foco é início rápido com qualidade e visual caprichado. Você evolui aos poucos.",
-            },
-            {
-              q: "Em quanto tempo consigo vender?",
-              a: "Depende do seu ritmo, mas muita gente faz as primeiras vendas já na primeira semana.",
-            },
-            {
-              q: "Recebo o material como?",
-              a: "Acesso imediato pela Eduzz. Conteúdo principal + materiais de apoio em PDF. Aulas em vídeo incluídas.",
-            },
-          ].map(({ q, a }) => (
-            <div key={q} className="rounded-2xl bg-white border border-[#EEDFD2] p-5">
-              <div className="flex items-start gap-3">
-                <HelpCircle className="h-5 w-5 mt-0.5 text-[#FF6B00]" />
-                <div>
-                  <h4 className="font-semibold">{q}</h4>
-                  <p className="mt-1 text-sm text-[#4B423C]">{a}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA FINAL */}
-        <div className="text-center mt-10">
-          <p className="mb-3 text-sm text-[#4B423C]">
-            Acesse agora e assista às aulas em vídeo ainda hoje — comece a produzir seus primeiros bolos com confiança.
+          {/* Título e descrição */}
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight">Bolos Caseiros Lucrativos</h1>
+          <p className="mt-2 text-xl font-medium text-amber-700">Simples, bonitos e que vendem</p>
+          <p className="mt-4 text-gray-700 text-base sm:text-lg max-w-2xl">
+            Transforme receitas simples em renda real. Kit completo com vídeo-aulas, PDF ilustrado e planilha de custos
+            para lucrar hoje mesmo.
           </p>
-          <a
-            href={withOrigin(LINK_MAIN)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackAddToCart("CTA Final - Bolos Caseiros")}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F1A17] text-white px-6 py-3 text-sm font-medium shadow-sm hover:opacity-90"
-          >
-            Começar por R$10 agora <ArrowRight className="h-4 w-4" />
-          </a>
-          <div className="mt-2 text-[11px] text-[#816e62]">Compra segura pela Eduzz • 7 dias de garantia</div>
-        </div>
 
-        {origem?.toLowerCase() === "tetelpontocom" && (
-          <div className="mt-14 text-center">
+          {/* Mockups */}
+          <div className="mt-10 flex flex-wrap justify-center gap-8">
+            <div className="flex flex-col items-center w-32">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/mockup-pdf-bolos-caseiros-nphnxVcQBM4rH4FhVRW1rAigMmEH9Q.png"
+                alt="PDF Ilustrado com Receitas"
+                className="rounded-md shadow-md h-28 object-contain"
+                loading="lazy"
+                decoding="async"
+              />
+              <p className="font-medium mt-2 text-sm">PDF Ilustrado</p>
+            </div>
+            <div className="flex flex-col items-center w-32">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/mockup-video-bolos-caseiros-ApdHcUoQojlMahSNpTa1fn7kVEiZs6.png"
+                alt="Vídeo-Aulas em Formato Prático"
+                className="rounded-md shadow-md h-28 object-contain"
+                loading="lazy"
+                decoding="async"
+              />
+              <p className="font-medium mt-2 text-sm">Vídeo-Aulas</p>
+            </div>
+            <div className="flex flex-col items-center w-32">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/mockup-planilha-bolos-caseiros-VoVO42dccZxl513uiGdU1lijd8nFwJ.png"
+                alt="Planilha de Custos para Precificação"
+                className="rounded-md shadow-md h-28 object-contain"
+                loading="lazy"
+                decoding="async"
+              />
+              <p className="font-medium mt-2 text-sm">Planilha de Custos</p>
+            </div>
+          </div>
+
+          {/* CTAs */}
+          <div className="mt-10 flex flex-wrap justify-center gap-4">
             <a
-              href="https://tetelpontocom.tetel.online"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#EEDFD2] text-[#1F1A17] px-5 py-3 text-sm font-medium hover:bg-[#EBD2BF] transition"
+              href={checkoutHref}
+              onClick={handleCheckout}
+              className="bg-black text-white px-6 py-3 rounded-2xl font-semibold hover:scale-[1.03] transition-transform duration-200"
             >
-              <Home className="h-4 w-4" /> Voltar à TetelPontocom
+              Quero começar agora
+            </a>
+            <a
+              href="#oferta"
+              className="border border-black/30 px-6 py-3 rounded-2xl font-medium text-black/80 hover:scale-[1.03] transition-transform duration-200"
+            >
+              Ver tudo que está incluso
             </a>
           </div>
-        )}
+
+          {/* Selo técnico */}
+          <p className="mt-8 text-sm text-black/60">
+            Parte do Ecossistema <strong>TetelPontocom</strong> — compatível com o padrão{" "}
+            <strong>V0 Free Safe Mode</strong>.
+          </p>
+        </div>
       </section>
 
-      {/* RODAPÉ */}
-      <footer className="border-t border-[#F0E1D2] bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-8 text-center text-sm text-[#6D5F56]">
-          Produzido por <b>TetelPontocom</b> — parte do Ecossistema Tetel.
-          <br className="sm:hidden" />
-          <span className="text-[#9a877a]">Conteúdo original licenciado com direito de revenda.</span>
+      {/* ========================= OFERTA ========================= */}
+      <section id="oferta" className="py-16 bg-white text-center" data-scope="features">
+        <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-gray-900">O que vem no Kit Completo</h2>
+        <div className="max-w-3xl mx-auto text-gray-700 text-lg space-y-3 text-left feature-list">
+          <div className="feature-item">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span>Receitas testadas com ingredientes simples e acessíveis</span>
+          </div>
+
+          <div className="feature-item">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span>PDF ilustrado com instruções passo a passo e medidas exatas</span>
+          </div>
+
+          <div className="feature-item">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span>Vídeo-aulas curtas e práticas para acelerar o aprendizado</span>
+          </div>
+
+          <div className="feature-item">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span>Planilha de custos para precificar e lucrar com clareza</span>
+          </div>
+
+          <div className="feature-item">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span>Estratégia de apresentação e fotografia com celular</span>
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <a
+            href={checkoutHref}
+            onClick={handleCheckout}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-8 py-4 rounded-2xl shadow-lg transition-transform hover:scale-[1.02]"
+          >
+            Quero garantir meu acesso agora
+          </a>
+        </div>
+      </section>
+
+      {/* ========================= POR QUE FUNCIONA ========================= */}
+      <section className="py-14 bg-[#fff6f0] text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Por que funciona</h2>
+        <p className="text-gray-700 max-w-2xl mx-auto leading-relaxed">
+          Porque foi criado para quem quer resultados reais, sem enrolação. Tudo foi testado, ajustado e otimizado para
+          gerar retorno rápido e sustentável — no seu ritmo.
+        </p>
+        <p className="text-sm text-gray-500 mt-4">
+          Parte do Ecossistema <strong>TetelPontocom</strong> — compatível com o padrão{" "}
+          <strong>V0 Free Safe Mode</strong>.
+        </p>
+      </section>
+
+      {/* ========================= RODAPÉ ========================= */}
+      <footer className="bg-[#fff6f0] border-t border-gray-200 py-10 text-center text-gray-700">
+        <div className="max-w-5xl mx-auto px-4 space-y-4">
+          <div className="flex flex-col items-center space-y-2">
+            <span className="font-semibold text-lg">TetelPontocom</span>
+            <p className="text-sm text-gray-500">Ecossistema de projetos digitais — propósito, fluidez e resultado.</p>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-600 mt-4">
+            <a href="https://pravoce.tetel.online" className="hover:text-black transition">
+              PraVocê
+            </a>
+            <a href="https://teteldigital.tetel.online" className="hover:text-black transition">
+              TetelDigital
+            </a>
+            <a href="https://autoridadedigital.tetel.online" className="hover:text-black transition">
+              Autoridade Digital
+            </a>
+            <a href="https://minhaia.tetel.online" className="hover:text-black transition">
+              Minha IA
+            </a>
+          </div>
+
+          <div className="border-t border-gray-200 my-6"></div>
+
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>Pagamento seguro pela Eduzz · 7 dias de garantia</p>
+            <p>
+              © {new Date().getFullYear()} Todos os direitos reservados — <strong>TetelPontocom</strong>
+            </p>
+            <p>
+              Compatível com o padrão <strong>V0 Free Safe Mode</strong> ·{" "}
+              <span className="italic">feito com inteligência e propósito</span>
+            </p>
+          </div>
         </div>
       </footer>
-    </main>
+
+      {/* Fallback noscript */}
+      <noscript>
+        <img
+          height="1"
+          width="1"
+          style={{ display: "none" }}
+          src={`https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1`}
+          alt=""
+        />
+      </noscript>
+    </div>
   )
 }
+
+export default Page
